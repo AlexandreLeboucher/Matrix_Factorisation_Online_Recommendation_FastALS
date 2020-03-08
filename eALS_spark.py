@@ -5,6 +5,7 @@ import sys
 import numpy as np
 from numpy.random import rand
 from numpy import matrix
+np.random.seed(42)
 from pyspark.sql import SparkSession
 import pyspark
 import pandas as pd
@@ -14,12 +15,6 @@ from pyspark.ml.linalg import SparseVector
 # from pyspark.mllib.linalg import SparceMatrix
 import time
 
-LAMBDA = 0.01   # regularization
-ITERATIONS = 10
-partitions = 5000
-np.random.seed(42)
-    
-factors = 20 # K
 
 def loadSimplified(file_path):
     # Reading from CSV
@@ -194,7 +189,7 @@ if __name__ == "__main__":
 #     F = 10
 #     trainMatrix = coo_matrix(np.matrix(rand(M, F)) * np.matrix(rand(U, F).T))
 
-    
+
     # Using same notation as author's code
     userCount = trainMatrix.shape[0] # M
     itemCount = trainMatrix.shape[1] # N
@@ -202,6 +197,11 @@ if __name__ == "__main__":
     w0 = 10.0
     init_mean = 0
     init_stdev = 0.1
+    
+    LAMBDA = 0.01   # regularization
+    ITERATIONS = 10
+    partitions = 5000
+    factors = 20 # K
     
     W = trainMatrix.copy() # Unsure if W and train matrix should be the same
     
