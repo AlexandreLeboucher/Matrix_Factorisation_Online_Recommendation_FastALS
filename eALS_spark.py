@@ -16,9 +16,9 @@ from pyspark.ml.linalg import SparseVector
 import time
 
 
-def loadSimplified(file_path):
+def loadSimplified(file_path, ratingFile):
     # Reading from CSV
-    df_reviews_paper = pd.read_csv(file_path+'yelp_rating.csv', delimiter='\t', header=None)
+    df_reviews_paper = pd.read_csv(file_path+ratingFile, delimiter='\t', header=None)
 
     # Removing duplicate ratings !
     l = list(set(zip(df_reviews_paper[0], df_reviews_paper[1])))
@@ -30,6 +30,51 @@ def loadSimplified(file_path):
                              shape=(max(df_reviews_paper[0])+1, max(df_reviews_paper[1])+1), 
                              dtype=np.int64)
     return trainMatrix
+
+
+def loadYelp(file_path, ratingFile):
+    '''
+    Note: This function selects a few features from the review dataset, and omits the text feature because of memory concerns
+    '''
+    review_features = ["review_id", "user_id", "business_id", "stars", "date", "useful", "funny", "cool"]
+    reviewFile = []
+    print("Generating matrix R from dataset file. May take up to a minute...")
+    with open(file_path+ratingFile, encoding="utf8") as infile:
+        for line in infile: # For loop takes about 60 sec
+            json_line = json.loads(line)
+            reviewFile.append([json_line[feature] for feature in review_features])
+            
+    df_reviews = pd.DataFrame(reviewFile, columns=review_features)
+    
+    # Sorting by date
+    df_reviews['date'] = pd.to_datetime(df_reviews['date'])
+    df_reviews.set_index('date', inplace=True)
+    df_reviews.sort_index(inplace=True)
+    
+    # Getting lists of unique users and businesses
+    user_id_list = list(df_reviews['user_id'].value_counts().keys())
+    business_id_list = list(df_reviews['business_id'].value_counts().keys())
+    # review_id_list = list(df_reviews['review_id'].value_counts().keys())
+    print("user_id length: ", len(user_id_list))
+    print("business_id length: ", len(business_id_list))
+    
+    # Mapping users and businesses to numbers
+    user_mapping = dict(list(enumerate(user_id_list)))
+    business_mapping = dict(list(enumerate(business_id_list)))
+
+    # Reversing the key and values for mapping
+    user_mapping = {v: k for k, v in user_mapping.items()}
+    business_mapping = {v: k for k, v in business_mapping.items()}
+
+    # Mapping
+    df_reviews['user_coord'] = list(df_reviews['user_id'].map(user_mapping))
+    df_reviews['business_coord'] = list(df_reviews['business_id'].map(business_mapping))
+    
+    trainMatrix = coo_matrix(([1]*len(df_reviews['stars']), (df_reviews['user_coord'], df_reviews['business_coord'])), 
+                         shape=(len(user_id_list), len(business_id_list)), dtype=np.int64)
+    
+    return trainMatrix
+
 
 def init():
     ### Generating weight matrix p, Wi, W
@@ -46,15 +91,11 @@ def init():
     # Assign weight
     Wi = w0*p/Z
 
-    # By default, the weight for positive instance is uniformly 1.
-    W = trainMatrix.copy()
-
     # Init caches
     U = np.random.normal(init_mean, init_stdev, (userCount, factors))
     V = np.random.normal(init_mean, init_stdev, (itemCount, factors))
-
     
-    return U, V,  Wi
+    return U, V, Wi
 
 
 def rmseDense(R, U, V):
@@ -128,8 +169,7 @@ def update_item(item_iterable_chunk, Wi, U, SU):
                 numer -= VRow[k] * SU[f, k]
         
         numer *= Wi[i]
-
-
+        
         # O(Ni) complexity for the positive part
         for u in userIndexes:
             prediction_users[u] -= U[u, f] * VRow[f]
@@ -168,7 +208,6 @@ def lossSpark(user_iterable_chunk, Wi, V, SV):
     
 
 
-
 if __name__ == "__main__":
     
     ### Loading Datasets
@@ -177,10 +216,10 @@ if __name__ == "__main__":
     # 3 datasets:
     
     # First: Pretty large, tested, works
-    trainMatrix = loadSimplified(file_path)
+#     trainMatrix = loadSimplified(file_path, 'yelp_rating.csv')
     
     # Second: Full Yelp. Larger. untested
-#     trainMatrix = loadYelp(file_path)
+    trainMatrix = loadYelp(file_path, 'review.json')
 
     # Third: Very simple, just for testing
 
@@ -289,7 +328,7 @@ if __name__ == "__main__":
         
         # Spark loss calculation
         L = LAMBDA * (np.sum(U**2) + np.sum(V**2))
-        LOSS = sc.parallelize(user_iterable, partitions/2) \
+        LOSS = sc.parallelize(user_iterable, partitions) \
                         .map(lambda u: lossSpark(
                             (u[0], u[1], u[2], u[3]), 
                             Wi_b.value, 
