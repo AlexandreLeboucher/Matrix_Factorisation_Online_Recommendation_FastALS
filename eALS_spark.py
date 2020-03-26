@@ -216,10 +216,10 @@ if __name__ == "__main__":
     # 3 datasets:
     
     # First: Pretty large, tested, works
-#     trainMatrix = loadSimplified(file_path, 'yelp_rating.csv')
+    trainMatrix = loadSimplified(file_path, 'yelp_rating.csv')
     
     # Second: Full Yelp. Larger. untested
-    trainMatrix = loadYelp(file_path, 'review.json')
+#     trainMatrix = loadYelp(file_path, 'review.json')
 
     # Third: Very simple, just for testing
 
