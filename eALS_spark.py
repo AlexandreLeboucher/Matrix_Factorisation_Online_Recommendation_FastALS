@@ -211,7 +211,8 @@ def lossSpark(user_iterable_chunk, Wi, V, SV):
 if __name__ == "__main__":
     
     ### Loading Datasets
-    file_path = "data/" # Unix path
+#     file_path = "data/" # Unix path
+    file_path = "" # WHen running with all files in the same directory, such as on github
     
     # 3 datasets:
     
